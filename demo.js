@@ -26,9 +26,14 @@ app.use((ctx, next)=>{
 
 console.log( Reflect.ownKeys( app) )
 
+
 // app.listen实际上可以看做语法糖
 // 
 app.listen( 8999 )
+app.on('error', (evt)=>{
+
+console.log( evt )
+})
 
 // 手动创建一个http 服务
 const http = require('http')

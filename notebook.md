@@ -5,12 +5,10 @@ Koa 实例上有哪些方法？？
 
 ## Koa程序流程
 
+**requirements**
+1. node.js http模块的中`createServer`及`listen`方法的使用；
 
-http.createServer( app.callback()).listen()
 
-app.callback() -> handleRequest() -> createContext 
-
-onerror
 
 
 1. http.createServer创建一个http服务进程，这个方法接收一个函数作为有http请求时回调；
