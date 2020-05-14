@@ -1,44 +1,67 @@
-直入正题：Koa 实例上有哪些方法？？
+> Koa是基于Node.js的web框架，利用它可以很快搭建起一个http服务。本来是要利用它验证下http协议中某些细节问题，但是发现源码不多，就顺带看了下。
+
+Koa作为一个第三方模块，对外仅暴露了 `Application`和`HttpError`。 我们仅讨论`Application`（`HttpError`实际为第三方模块，用于处理http错误）。
+
+`Application`是一个`class`可看做Koa自身，先看下Koa实例上有哪些方法：
 
 ![koa app](./imgs/Koa-app.png)
+
+上面的这些方法除了`inspect`和`toJSON`外这两个辅助方法外，其余方法都是应用于web服务运行的。
 
 ## Koa程序流程
 
 **requirements**
-1. node.js http模块的中`createServer`及`listen`方法的使用；
+1. 利用node创建web服务，主要依靠`http`模块（https/http2类似）。需要了解下`http`模块的中`createServer`及`listen`方法的使用；
 
-Koa做的事情：创建一个http服务，监听系统分发到该服务上客户端请求并响应该请求。具体流程如下：
+简单说下Koa创建web服务做的事情：创建一个http服务，监听系统分发到该服务上客户端请求并响应该请求。具体流程如下：
 
 1. `http.createServer`创建一个http服务进程，这个方法接收一个函数作为有http请求时回调；
 2. `app.callback` 组合middleware并返回了一个函数`fn`，这个函数`fn`处理http 请求；
 3. 当有http请求时，在函数`fn`中调用`createContext`方法创建上下文`ctx`；
 4. 将创建的上下文`ctx`交给compose后的middleware处理；
 
-Koa提供的只有这个么一个架子，在web服务中经常用到的router，bodyparser，cookie等都交给了自定义的middleware处理。
+Koa提供的只有这个么一个流程架子，在web服务中经常用到的router，bodyparser，cookie等都交给了自定义的middleware处理。
 
-这个处理流程的模型就是Koa种总提到的洋葱模型。
+而这个处理流程的抽象出来的模型就是Koa中总提到的**洋葱模型**。
 
 
 ## Koa洋葱模型解释
-理解了compose方法就理解了洋葱模型。我们说过，compose方法的作用就是将若干个函数合并成一个函数。简易版实现如下：
+
+洋葱模型的实现靠的是koa-compose模块。 这是一个compose方法，koa-compose组合函数实现了处理流程的嵌套，我们先看一个不带嵌套的compose方法，对compose形成一个大概的概念。
+``` js
+// 接收多个函数作为参数，并返回一个新的函数
+function compose(...fn){
+    return  function(...args){
+        var ret;
+        // 依次执行每个函数
+        for(var i=0; i < fn.length; i++){
+            ret = fn[i].apply(this, args)
+        }
+        return ret;
+    }
+}
+```
+
+那么带嵌套的compose是什么意思？ 在Koa中，use方法用于注册一个middleware，其参数是一个函数`fn`。use方法把这些函数都存放到app.middleware中，最终利用koa-compose讲这些函数组合成一个新的函数。函数`fn`接收两个参数`ctx`和`next`，看官方图的示例：
+
+![middleware](imgs/middleware.gif)
+
 ``` js
 function compose(...fn){
     if( fn.length === 0 ) return function(){}
     function dispatch(i){
         var next = i+1 < fn.length ? dispatch(i+1) : function(){}
         return function(ctx){
-            fn[i]( ctx, function(){
-                next(ctx)
-            })
+            fn[i]( ctx, function(){ next(ctx) })
         }
     }
     return dispatch( 0 )
 }
 ```
+简单解释下，就是要进行组合的若干的函数，可在未执行完时，先去执行后面的函数，等后面的函数执行完毕，再继续执行后续未执行的部分。
 
 
-
-而Koa使用的是支持异步的koa-compose
+而Koa使用的koa-compose，不仅支持了嵌套，还支持异步。把每一个函数的都变成异步函数然后通过`then`方法链接起来。
 
 ```js
 function compose(...fn){
@@ -46,11 +69,8 @@ function compose(...fn){
     function dispatch(i){
         var next = i+1 < fn.length ? dispatch(i+1) : function(){}
         return new Promise(function(resolve, reject){
-
             function(ctx){
-                fn[i]( ctx, function(){
-                next(ctx)
-                })
+                fn[i]( ctx, function(){ next(ctx)  })
             }
         })
     }
@@ -58,34 +78,34 @@ function compose(...fn){
 }
 ```
 
+至此应该已经理解洋葱模型了，它本质上是解决问题的一种固定模式。如果不理解，以Koa中间件的写法为例，可简单粗暴的理解为，洋葱左半部分的是`next()`方法之前的处理流程，右半部分为`next()`之后的处理流程。
+
+也可以把http请求当成一个流stream，每个中间件都有两个门，一个进来的门，一个出去的门。如果一个中间件中存在`next()`，则意味着在两个门之间又调用了其它中间件。
+不过`next()`语句的位置也很值得玩味。在中间件中：
+1. 如果`next()`的位置都出在函数最后，则这些中间件可以理解为顺序执行；
+2. 如果`next()`都处在函数最前面，则这些中间件按注册顺序倒序执行；
+3. 如果`next()`都在函数中间，则这些中间件构成一个典型的洋葱模型；
+
+![Koa onion](imgs/koa-onion.png)
 
 ### Koa洋葱模型解决的问题
+首先考虑下，如果不使用Koa目前的这种方式，有什么其它方法可以更好地扩展机制用来处理客户端发来的请求。
 
-1. callback 导致的回调地域，便于以同步的方式写异步程序；
-2. 中间件机制为程序扩展提供了便捷的接口；
-
-洋葱模型的本质是**将多个处理函数组合成一个函数**供业务调用。
-``` js
-app.use( (ctx, next)=>{
-    console.log( `start time :${Date.now()}` )
-    next()
-    console.log( `end time: ${Date.now()}`)
-})
-app.use( (ctx, next)=>{
-    console.log('balabala')
-})
-```
-在源码中app.use方法的实现可以简化为：
-```js
-function use(fn){
-    this.middleware.push(fn);
-}
-```
+我们问题的场景：
+> 我们基于node的`http.createServer(callback)`创建了一个http服务，用于监听客户端发来的请求request，其中callback用于处理request并作出response。也就是说所有的处理逻辑都在这个callback中。OK，我们的问题就是把路由、登录状态、日志、数据查询等逻辑组合到这个callback中。那么你会怎么处理呢？？
 
 
+我总结下下来的koa使用洋葱模型的好处：
+1. 利用`Promise.then`处理异步，实现多个异步中间件的有序执行（实际上，是将所有的中间件改为异步并通过`then`方法一个个串联起来）；
+2. 中间件机制为程序处理http请求，提供了更加便捷的扩展方式；
+3. 支持异步程序的同步写法，更便于不同逻辑间的组合；
 
 
-## generator 如何转为 async
+## Promise与Generator及async/await
+
+### Generator 转 async/await
+
+###  async/await 转 Promise + Generator
 
 
 ## delegate Node原生 request/response
