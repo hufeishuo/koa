@@ -1,12 +1,12 @@
 > Koa是基于Node.js的web框架，利用它可以很快搭建起一个http服务。本来是要利用它验证下http协议中某些细节问题，但是发现源码不多，就顺带看了下。
 
-Koa作为一个第三方模块，对外仅暴露了 `Application`和`HttpError`。 我们仅讨论`Application`（`HttpError`实际为第三方模块，用于处理http错误）。
+Koa作为一个第三方模块，对外仅暴露了 `Application`和`HttpError`。 我们仅讨论`Application`（`HttpError`实际为第三方模块，用于给Koa添加自定义的http错误处理方法）。
 
 `Application`是一个`class`可看做Koa自身，先看下Koa实例上有哪些方法：
 
 ![koa app](./imgs/Koa-app.png)
 
-上面的这些方法除了`inspect`和`toJSON`外这两个辅助方法外，其余方法都是应用于web服务运行的。
+上面的这些方法除了`inspect`和`toJSON`这两个辅助方法外，其余方法都应用于web服务的运行。
 
 ## Koa程序流程
 
@@ -16,9 +16,9 @@ Koa作为一个第三方模块，对外仅暴露了 `Application`和`HttpError`�
 简单说下Koa创建web服务做的事情：创建一个http服务，监听系统分发到该服务上客户端请求并响应该请求。具体流程如下：
 
 1. `http.createServer`创建一个http服务进程，这个方法接收一个函数作为有http请求时回调；
-2. `app.callback` 组合middleware并返回了一个函数`fn`，这个函数`fn`处理http 请求；
-3. 当有http请求时，在函数`fn`中调用`createContext`方法创建上下文`ctx`；
-4. 将创建的上下文`ctx`交给compose后的middleware处理；
+2. `app.callback` 组合middleware并返回了一个函数`fn`，这个函数`fn`处理http请求；
+3. 当有http请求到达服务端时，在函数`fn`中调用`createContext`方法创建上下文`ctx`；
+4. 将创建的上下文`ctx`交给middleware被compose后产生的函数`fn`处理， middleware里存放了我们所有的业务逻辑；
 
 Koa提供的只有这个么一个流程架子，在web服务中经常用到的router，bodyparser，cookie等都交给了自定义的middleware处理。
 
@@ -46,6 +46,7 @@ function compose(...fn){
 
 ![middleware](imgs/middleware.gif)
 
+可以看得出，next实际上是调用了下一个中间件。当下一个中间件执行完，在回到当前中间件，继续执行next()后面的语句。这样一来，就形成了中间件的嵌套。
 ``` js
 function compose(...fn){
     if( fn.length === 0 ) return function(){}
@@ -58,7 +59,7 @@ function compose(...fn){
     return dispatch( 0 )
 }
 ```
-简单解释下，就是要进行组合的若干的函数，可在未执行完时，先去执行后面的函数，等后面的函数执行完毕，再继续执行后续未执行的部分。
+根据源码简单解释下，嵌套的compose就是把要进行组合的若干的函数，可在未执行完时，先去执行后面的函数，等后面的函数执行完毕，再继续执行后续未执行的部分。
 
 
 而Koa使用的koa-compose，不仅支持了嵌套，还支持异步。把每一个函数的都变成异步函数然后通过`then`方法链接起来。
@@ -104,9 +105,41 @@ function compose(...fn){
 ## Promise与Generator及async/await
 
 ### Generator 转 async/await
+有一个generator函数 `g`如下：
+``` js
+function* g(start){
+    var x = yield start+1;
+    var y = yield x+2;
+    return y;
+}
+```
+Generator函数返回的结果和用法不再赘述。我们的目的是要把这个转成async/await， 也就意味不需要我们手动调用next方法就可以获得结果。所以需要有自动调用next方法的机制。
+
+``` js
+function co(fn, ...args) {
+    var g = fn.apply(this, args);
+
+    return new Promise(function (resolve, reject) {
+        function step(ret) {
+            var result = g.next(ret);
+            if (result.done) {
+                return resolve(result.value)
+            } else if( result.value.next){
+                result.value.then( step )
+            } else {
+                step( result.value)
+            }
+        }
+        step()
+    });
+}
+```
 
 ###  async/await 转 Promise + Generator
 
 
 ## delegate Node原生 request/response
+
+
+## try catch在什么情况下会比较明显的影响到性能
 
