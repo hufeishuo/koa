@@ -103,10 +103,71 @@ function compose(...fn){
 
 ## Promise与Generator及async/await
 
+1. Promise ----> ES6/ES2015
+2. Generator ----> ES7/ES2016
+3. async/await ----> ES8/ES2017
 ### Generator 转 async/await
 
-###  async/await 转 Promise + Generator
+```js
 
+```
+
+###  async/await 转 Promise + Generator
+``` js
+
+```
 
 ## delegate Node原生 request/response
 
+
+## node request中的socket
+
+
+
+## HTTP协议相关
+### headersSent
+
+### vary是什么
+
+### http响应body为空的三个c890-/kiode码
+- 204: 只需知道响应是否成功，不跳转
+- 205: 清空当前页面html中所有的表单元素；
+- 304: 缓存可用，无需返回新的内容；
+
+
+### proxy 与 X-Forwarded-Host
+
+### http/2 
+## Koa支持 http/2的方式
+To implement this and just use `app.callback`.
+``` js
+const fs = require('fs');
+const http2 = require('http2');
+const Koa = require('koa');
+
+const app = new Koa();
+
+app.use(ctx => {
+  ctx.body = 'Hello Koa'; // or any other stream
+});
+
+const options = {
+  key: fs.readFileSync('xxx.key'),
+  cert: fs.readFileSync('xxx.crt'),
+};
+const server = http2.createSecureServer(options, app.callback());
+
+server.listen(443);
+```
+#### Status message
+http/2不允许自定义status message，意味着每个规范中的code值都有对应的description。
+#### 伪头部字段
+
+HTTP/1.x 使用消息开始行（RFC7230 Section 3.1）传递**目标URL**，**请求方法**，**响应状态码**等信息。HTTP/2使用特殊的以":"开始的伪头部字段来达到这个目的。不属于常规HTTP头部字段，不允许终端自己产生，只允许规范中所定义的5个：
+- :method
+- :path
+- :scheme
+- :authority
+- :status
+
+![http2 pseudo-header fields](/imgs/http2_pseudo-header_fields.png)
