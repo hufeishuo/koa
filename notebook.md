@@ -107,6 +107,7 @@ function compose(...fn){
 1. Promise ----> ES6/ES2015
 2. Generator ----> ES7/ES2016
 3. async/await ----> ES8/ES2017
+
 ### Generator 转 async/await
 有一个generator函数 `g`如下：
 ``` js
@@ -138,26 +139,23 @@ function co(fn, ...args) {
 }
 ```
 
-```js
-
-```
-
-###  async/await 转 Promise + Generator
-``` js
-
-```
-
-## delegate Node原生 request/response
+## ~~delegate Node原生 request/response~~
+`Object.defineProperty`/`__defineGetter__`/`__defineSetter__`的关系
 
 
 ## node request中的socket
-
+`request.socket`指向底层套接字， 网络中进程进行通信的一种机制。相对应的就有本地进程进行通信的机制（IPC，共享内存）。
 
 
 ## HTTP协议相关
 ### headersSent
+存在于node.js  response 上，布尔值（只读）。 如果已发送响应头，则为 true，否则为 false。这个涉及到http协议中数据发送流程的细节。
 
 ### vary是什么
+> The "Vary" header field in a response describes what parts of a request message, aside from the method, Host header field, and request target, might influence the origin server's process for selecting and representing this response.
+
+可以说vary为客户端提供了明确告知服务端不需要使用缓存的机制（通过指定哪些header变化会导致服务端重新提供响应内容）。
+更多信息参考[http spec(7.1.4.  Vary)](https://tools.ietf.org/html/rfc7231#section-7.1.4) 和 [Best Practices for Using the Vary Header](https://www.fastly.com/blog/best-practices-using-vary-header)
 
 ### http响应body为空的三个c890-/kiode码
 - 204: 只需知道响应是否成功，不跳转
@@ -166,9 +164,11 @@ function co(fn, ...args) {
 
 
 ### proxy 与 X-Forwarded-Host
+`X-Forwarded-Host`：请求的源头服务器，当有代理服务器介入时，代理可能会导致原有的客户端信息丢失，可以使用此字段存储原始信息。
+
 
 ### http/2 
-## Koa支持 http/2的方式
+#### Koa支持 http/2的方式
 To implement this and just use `app.callback`.
 ``` js
 const fs = require('fs');
@@ -190,7 +190,7 @@ const server = http2.createSecureServer(options, app.callback());
 server.listen(443);
 ```
 #### Status message
-http/2不允许自定义status message，意味着每个规范中的code值都有对应的description。
+http/2不允许自定义status message，意味着每个规范中的code值都有固定的description。
 #### 伪头部字段
 
 HTTP/1.x 使用消息开始行（RFC7230 Section 3.1）传递**目标URL**，**请求方法**，**响应状态码**等信息。HTTP/2使用特殊的以":"开始的伪头部字段来达到这个目的。不属于常规HTTP头部字段，不允许终端自己产生，只允许规范中所定义的5个：
@@ -201,5 +201,12 @@ HTTP/1.x 使用消息开始行（RFC7230 Section 3.1）传递**目标URL**，**�
 - :status
 
 ![http2 pseudo-header fields](/imgs/http2_pseudo-header_fields.png)
+
 ## try catch在什么情况下会比较明显的影响到性能
+V8很早已经对`try catch`做了性能优化（TurboFan，随 Chrome 59 发布），影响基本可以忽略不计。
+[V8: Behind the Scenes (November Edition feat. Ignition+TurboFan and ES2015)](https://benediktmeurer.de/2016/11/25/v8-behind-the-scenes-november-edition)
+
+![V8-try-catch-test](/imgs/v8-try-catch-test.jpg)
+
+根据ECMA文档可知，`try catch`性能消耗主要原因在于对当前词法作用域的额外拷贝，这个过程是跟业务无关的，必然会或多或少牺牲掉部分性能。
 
